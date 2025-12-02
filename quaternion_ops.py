@@ -167,7 +167,7 @@ def quaternion_transpose_conv(input, r_weight, i_weight, j_weight, k_weight, bia
 
 
 def quaternion_conv_rotation(input, r_weight, i_weight, j_weight, k_weight, bias, stride, 
-                    padding, groups, dilatation):
+                    padding, groups, dilatation, quaternion_format=True):
     """
     Applies a quaternion rotation and convolution transformation to the incoming data:
 
@@ -358,12 +358,12 @@ def quaternion_linear_rotation(input, r_weight, i_weight, j_weight, k_weight, bi
     jk                = (norm_factor*j_weight*k_weight)
 
     if quaternion_format:
-        zero_kernel   = torch.zeros(r_weight.shape).cuda()
+        zero_kernel   = torch.zeros(r_weight.shape, device=r_weight.device)
         rot_kernel_1  = torch.cat([zero_kernel, 1.0 - (square_j + square_k), ij-rk, ik+rj], dim=0)
         rot_kernel_2  = torch.cat([zero_kernel, ij+rk, 1.0 - (square_i + square_k), jk-ri], dim=0)
         rot_kernel_3  = torch.cat([zero_kernel, ik-rj, jk+ri, 1.0 - (square_i + square_j)], dim=0)
 
-        zero_kernel2  = torch.zeros(rot_kernel_1.shape).cuda()
+        zero_kernel2  = torch.zeros(rot_kernel_1.shape, device=r_weight.device)
         global_rot_kernel = torch.cat([zero_kernel2, rot_kernel_1, rot_kernel_2, rot_kernel_3], dim=1)
     else:
         rot_kernel_1  = torch.cat([1.0 - (square_j + square_k), ij-rk, ik+rj], dim=0)
@@ -630,10 +630,10 @@ def quaternion_init(in_features, out_features, rng, kernel_size=None, criterion=
     
     # Purely imaginary quaternions unitary
     for i in range(0, number_of_weights):
-    	norm = np.sqrt(v_i[i]**2 + v_j[i]**2 + v_k[i]**2 +0.0001)
-    	v_i[i]/= norm
-    	v_j[i]/= norm
-    	v_k[i]/= norm
+        norm = np.sqrt(v_i[i]**2 + v_j[i]**2 + v_k[i]**2 + 0.0001)
+        v_i[i] /= norm
+        v_j[i] /= norm
+        v_k[i] /= norm
     v_i = v_i.reshape(kernel_shape)
     v_j = v_j.reshape(kernel_shape)
     v_k = v_k.reshape(kernel_shape)
@@ -650,10 +650,11 @@ def quaternion_init(in_features, out_features, rng, kernel_size=None, criterion=
 def create_dropout_mask(dropout_p, size, rng, as_type, operation='linear'):
     if operation == 'linear':
         mask = rng.binomial(n=1, p=1-dropout_p, size=size)
-        return Variable(torch.from_numpy(mask).type(as_type))
+        t = torch.from_numpy(mask)
+        return t.type(as_type)
     else:
-         raise Exception("create_dropout_mask accepts only 'linear'. Found operation = "
-                        + str(operation))   
+        raise Exception("create_dropout_mask accepts only 'linear'. Found operation = "
+                        + str(operation))
 
 def affect_init(r_weight, i_weight, j_weight, k_weight, init_func, rng, init_criterion):
     if r_weight.size() != i_weight.size() or r_weight.size() != j_weight.size() or \
@@ -690,7 +691,7 @@ def affect_init_conv(r_weight, i_weight, j_weight, k_weight, kernel_size, init_f
 
     elif 2 >= r_weight.dim():
         raise Exception('affect_conv_init accepts only tensors that have more than 2 dimensions. Found dimension = '
-                        + str(real_weight.dim()))
+                        + str(r_weight.dim()))
 
     r, i, j, k = init_func(
         r_weight.size(1),

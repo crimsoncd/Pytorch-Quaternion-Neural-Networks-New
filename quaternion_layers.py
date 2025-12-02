@@ -72,7 +72,7 @@ class QuaternionTransposeConv(Module):
     def forward(self, input):
 
         if self.rotation:
-            return quaternion_tranpose_conv_rotation(input, self.r_weight, self.i_weight, 
+            return quaternion_transpose_conv_rotation(input, self.r_weight, self.i_weight, 
                 self.j_weight, self.k_weight, self.bias, self.stride, self.padding, 
                 self.output_padding, self.groups, self.dilatation, self.quaternion_format)
         else:

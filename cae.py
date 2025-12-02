@@ -8,13 +8,12 @@
 
 import torch
 from torch                import nn
-from torch.autograd       import Variable
 from torch.utils.data     import DataLoader
 from convolutional_models import CAE, QCAE
 import os
-from scipy                import misc
 import numpy              as np
 import sys
+import imageio.v2 as imageio
 
 
 def rgb2gray(rgb):
@@ -37,16 +36,15 @@ if model == 'QCAE':
 else:
     net  = CAE()
 
-if cuda:
-    net = net.cuda()
+device = torch.device('cuda' if cuda and torch.cuda.is_available() else 'cpu')
+net = net.to(device)
 
 #
 # MANAGING PICTURES
 #
-os.system('mkdir -p RES')
-os.system('rm -rf RES/test_image*')
-train = rgb2gray(misc.imread('KODAK/kodim05.png'))
-test  = misc.imread('KODAK/kodim23.png')
+os.makedirs('RES', exist_ok=True)
+train = rgb2gray(imageio.imread('KODAK/kodim05.png'))
+test  = imageio.imread('KODAK/kodim23.png')
 
 # Normalizing
 train = train / 255
@@ -89,8 +87,8 @@ else:
     test = np.transpose(test, (2,0,1))
     test = np.reshape(test, (1, test.shape[0], test.shape[1], test.shape[2]))
 
-train = torch.from_numpy(train).float().cuda()
-test  = torch.from_numpy(test).float().cuda()
+train = torch.from_numpy(train).float().to(device)
+test  = torch.from_numpy(test).float().to(device)
 
 for epoch in range(num_epochs):
     
@@ -101,12 +99,12 @@ for epoch in range(num_epochs):
     loss.backward()
     optimizer.step()
 
-    print("It : "+str(epoch+1)+" | loss_train "+str(loss.cpu().item()))
+    print("It : "+str(epoch+1)+" | loss_train "+str(loss.detach().cpu().item()))
     
     # If generation rate, generate a test image
     if (epoch %generation_rate) == 0:
         output = net(test)
-        out    = output.cpu().data.numpy()
+        out    = output.detach().cpu().numpy()
         if model == 'QCAE':
             out = np.transpose(out, (0,2,3,1))[:,:,:,1:]
             out = np.reshape(out, (out.shape[1], out.shape[2], out.shape[3]))
@@ -114,6 +112,6 @@ for epoch in range(num_epochs):
             out = np.transpose(out, (0,2,3,1))
             out = np.reshape(out, (out.shape[1], out.shape[2], out.shape[3]))
 
-        misc.imsave("RES/save_image"+str(epoch)+".png", out)
+        imageio.imwrite("RES/save_image"+str(epoch)+".png", out)
 
 

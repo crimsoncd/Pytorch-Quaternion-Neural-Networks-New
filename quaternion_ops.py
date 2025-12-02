@@ -8,7 +8,6 @@
 
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
 from numpy.random import RandomState
@@ -203,12 +202,12 @@ def quaternion_conv_rotation(input, r_weight, i_weight, j_weight, k_weight, bias
     jk                = (norm_factor*j_weight*k_weight)
 
     if quaternion_format:
-        zero_kernel   = torch.zeros(r_weight.shape).cuda()
+        zero_kernel   = torch.zeros(r_weight.shape, device=r_weight.device)
         rot_kernel_1  = torch.cat([zero_kernel, 1.0 - (square_j + square_k), ij-rk, ik+rj], dim=0)
         rot_kernel_2  = torch.cat([zero_kernel, ij+rk, 1.0 - (square_i + square_k), jk-ri], dim=0)
         rot_kernel_3  = torch.cat([zero_kernel, ik-rj, jk+ri, 1.0 - (square_i + square_j)], dim=0)
 
-        zero_kernel2  = torch.zeros(rot_kernel_1.shape).cuda()
+        zero_kernel2  = torch.zeros(rot_kernel_1.shape, device=r_weight.device)
         global_rot_kernel = torch.cat([zero_kernel2, rot_kernel_1, rot_kernel_2, rot_kernel_3], dim=1)
     else:
         rot_kernel_1  = torch.cat([1.0 - (square_j + square_k), ij-rk, ik+rj], dim=0)
@@ -265,12 +264,12 @@ def quaternion_transpose_conv_rotation(input, r_weight, i_weight, j_weight, k_we
     jk                = (norm_factor*j_weight*k_weight)
 
     if quaternion_format:
-        zero_kernel   = torch.zeros(r_weight.shape).cuda()
+        zero_kernel   = torch.zeros(r_weight.shape, device=r_weight.device)
         rot_kernel_1  = torch.cat([zero_kernel, 1.0 - (square_j + square_k), ij-rk, ik+rj], dim=0)
         rot_kernel_2  = torch.cat([zero_kernel, ij+rk, 1.0 - (square_i + square_k), jk-ri], dim=0)
         rot_kernel_3  = torch.cat([zero_kernel, ik-rj, jk+ri, 1.0 - (square_i + square_j)], dim=0)
 
-        zero_kernel2  = torch.zeros(rot_kernel_1.shape).cuda()
+        zero_kernel2  = torch.zeros(rot_kernel_1.shape, device=r_weight.device)
         global_rot_kernel = torch.cat([zero_kernel2, rot_kernel_1, rot_kernel_2, rot_kernel_3], dim=1)
     else:
         rot_kernel_1  = torch.cat([1.0 - (square_j + square_k), ij-rk, ik+rj], dim=0)
@@ -289,7 +288,7 @@ def quaternion_transpose_conv_rotation(input, r_weight, i_weight, j_weight, k_we
         raise Exception("The convolutional input is either 3, 4 or 5 dimensions."
                         " input.dim = " + str(input.dim()))
 
-    return convfunc(input, cat_kernels_4_quaternion, bias, stride, padding, output_padding, groups, dilatation)
+    return convfunc(input, global_rot_kernel, bias, stride, padding, output_padding, groups, dilatation)
 
 
 def quaternion_linear(input, r_weight, i_weight, j_weight, k_weight, bias=True):
@@ -424,7 +423,7 @@ class QuaternionLinearFunction(torch.autograd.Function):
         input_i = torch.cat([i_weight,  r_weight, -k_weight, j_weight], dim=0)
         input_j = torch.cat([j_weight,  k_weight, r_weight, -i_weight], dim=0)
         input_k = torch.cat([k_weight,  -j_weight, i_weight, r_weight], dim=0)
-        cat_kernels_4_quaternion_T = Variable(torch.cat([input_r, input_i, input_j, input_k], dim=1).permute(1,0), requires_grad=False)
+        cat_kernels_4_quaternion_T = torch.cat([input_r, input_i, input_j, input_k], dim=1).permute(1,0)
 
         r = get_r(input)
         i = get_i(input)
@@ -434,7 +433,7 @@ class QuaternionLinearFunction(torch.autograd.Function):
         input_i = torch.cat([i,  r, -k, j], dim=0)
         input_j = torch.cat([j,  k, r, -i], dim=0)
         input_k = torch.cat([k,  -j, i, r], dim=0)
-        input_mat = Variable(torch.cat([input_r, input_i, input_j, input_k], dim=1), requires_grad=False)
+        input_mat = torch.cat([input_r, input_i, input_j, input_k], dim=1)
 
         r = get_r(grad_output)
         i = get_i(grad_output)

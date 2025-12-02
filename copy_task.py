@@ -7,20 +7,20 @@
 ##########################################################
 
 import sys
+import os
 import torch
 import torch.nn          as nn
 from torch.nn            import Parameter
 from torch.nn            import functional as F
 import torch.optim
-from torch.autograd      import Variable
 import numpy             as np
 from recurrent_models    import QRNN, RNN, LSTM, QLSTM
 
 #
 # Convert to torch.Variable 
 #
-def tovar(x):
-    return Variable(torch.FloatTensor(x).cuda())
+def tovar(x, device):
+    return torch.as_tensor(x, dtype=torch.float32, device=device)
 
 def getTask(N_BATCH, SEQ_LENGTH, FEAT_SIZE, BLANK_SIZE, embedding):
     data   = []
@@ -36,18 +36,18 @@ def getTask(N_BATCH, SEQ_LENGTH, FEAT_SIZE, BLANK_SIZE, embedding):
 
         # Embedding
         blank_emb = FEAT_SIZE
-        blank_emb = torch.tensor(blank_emb, dtype=torch.long)
-        blank_emb = embedding(blank_emb).data.numpy()
+        blank_emb = torch.tensor(blank_emb, dtype=torch.long, device=embedding.weight.device)
+        blank_emb = embedding(blank_emb).detach().cpu().numpy()
         delim_emb = FEAT_SIZE + 1
-        delim_emb = torch.tensor(delim_emb, dtype=torch.long)
-        delim_emb = embedding(delim_emb).data.numpy()
+        delim_emb = torch.tensor(delim_emb, dtype=torch.long, device=embedding.weight.device)
+        delim_emb = embedding(delim_emb).detach().cpu().numpy()
 
         random_index_list = []
 
         for j in range(SEQ_LENGTH):
             random = np.random.randint(FEAT_SIZE, size=(1))
-            feat   = torch.tensor(random, dtype=torch.long)
-            feat   = embedding(feat).data.numpy()[0]
+            feat   = torch.tensor(random, dtype=torch.long, device=embedding.weight.device)
+            feat   = embedding(feat).detach().cpu().numpy()[0]
             random_index_list.append(random)
 
             seq.append(feat)
@@ -101,10 +101,11 @@ accs_r        = []
 accs_q        = []
 accs_test     = []
 
-net_r = LSTM(FEAT_SIZE, RNN_HIDDEN_SIZE, CUDA).cuda()
-net_q = QLSTM(FEAT_SIZE, QRNN_HIDDEN_SIZE, CUDA).cuda()
+device = torch.device('cuda' if CUDA and torch.cuda.is_available() else 'cpu')
+net_r = LSTM(FEAT_SIZE, RNN_HIDDEN_SIZE, CUDA).to(device)
+net_q = QLSTM(FEAT_SIZE, QRNN_HIDDEN_SIZE, CUDA).to(device)
 
-emb   = nn.Embedding(FEAT_SIZE+2, FEAT_SIZE, max_norm=1.0)
+emb   = nn.Embedding(FEAT_SIZE+2, FEAT_SIZE, max_norm=1.0).to(device)
 
 nb_param_q = sum(p.numel() for p in net_q.parameters() if p.requires_grad)
 nb_param_r = sum(p.numel() for p in net_r.parameters() if p.requires_grad)
@@ -134,8 +135,8 @@ for epoch in range(EPOCHS):
     # Train shape must be (SEQ_LENGTH, BATCH_SIZE, FEATURE_SIZE) for QLSTM and LSTM
     train = train.reshape((BLANK_SIZE+(2*SEQ_LENGTH),N_BATCH_TRAIN,FEAT_SIZE))
 
-    train_var        = tovar(train)
-    train_target_var = tovar(train_target)
+    train_var        = tovar(train, device)
+    train_target_var = tovar(train_target, device)
     
     # NN Training
     net_r.zero_grad()
@@ -153,7 +154,7 @@ for epoch in range(EPOCHS):
     net_r.adam.step()
     
     # Train ACC and LOSS
-    p       = p.cpu().data.numpy()
+    p       = p.detach().cpu().numpy()
     shape   = np.argmax(p, axis=2).shape
     p       = np.reshape(np.argmax(p, axis=2), shape[0]*shape[1])
     targets = targets.cpu().data.numpy()
@@ -162,9 +163,9 @@ for epoch in range(EPOCHS):
     
     if (epoch % 5) == 0:
         accs_r.append(acc)
-        losses_r.append(float(val_loss.data))
+        losses_r.append(val_loss.item())
     if (epoch % 10) == 0:
-        string = " (NN) It : "+str(epoch)+" | Train Loss = "+str(float(val_loss.data))+" | Train Acc = "+str(acc)
+        string = " (NN) It : "+str(epoch)+" | Train Loss = "+str(val_loss.item())+" | Train Acc = "+str(acc)
         print(string)
 
     # QNN Training
@@ -178,21 +179,22 @@ for epoch in range(EPOCHS):
     val_loss.backward()
     net_q.adam.step()
 
-    p       = p.cpu().data.numpy()
+    p       = p.detach().cpu().numpy()
     shape   = np.argmax(p, axis=2).shape
     p       = np.reshape(np.argmax(p, axis=2), shape[0]*shape[1])
     targets = targets.cpu().data.numpy()
     acc     = np.sum( p == targets) / (train_target.size)
     
     if (epoch % 5) == 0:
-        losses_q.append(float(val_loss.data))
+        losses_q.append(val_loss.item())
         accs_q.append(acc)
     if (epoch % 10) == 0:
-        string = "(QNN) It : "+str(epoch)+" | Train Loss = "+str(float(val_loss.data))+" | Train Acc = "+str(acc)
+        string = "(QNN) It : "+str(epoch)+" | Train Loss = "+str(val_loss.item())+" | Train Acc = "+str(acc)
         print(string)
 
 print("Training Ended - Saving Acc and losses in RES")
 
+os.makedirs("RES", exist_ok=True)
 np.savetxt("RES/memory_task_acc_q_"+str(BLANK_SIZE)+".txt", accs_q)
 np.savetxt("RES/memory_task_acc_r_"+str(BLANK_SIZE)+".txt", accs_r)
 np.savetxt("RES/memory_task_loss_q_"+str(BLANK_SIZE)+".txt", losses_q)

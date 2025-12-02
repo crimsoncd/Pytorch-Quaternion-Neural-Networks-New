@@ -9,7 +9,6 @@
 import numpy                 as np
 from numpy.random            import RandomState
 import torch
-from torch.autograd          import Variable
 import torch.nn.functional   as F
 import torch.nn              as nn
 from torch.nn.parameter      import Parameter
@@ -90,7 +89,7 @@ class QuaternionTransposeConv(Module):
             + ', kernel_size='    + str(self.kernel_size) \
             + ', stride='         + str(self.stride) \
             + ', padding='        + str(self.padding) \
-            + ', dilation='       + str(self.dilation) \
+            + ', dilation='       + str(self.dilatation) \
             + ', init_criterion=' + str(self.init_criterion) \
             + ', weight_init='    + str(self.weight_init) \
             + ', seed='           + str(self.seed) \
@@ -148,7 +147,7 @@ class QuaternionConv(Module):
 
         if self.rotation:
             return quaternion_conv_rotation(input, self.r_weight, self.i_weight, self.j_weight, 
-                self.k_weight, self.bias, self.stride, self.padding, selfn.groups, self.dilatation, 
+                self.k_weight, self.bias, self.stride, self.padding, self.groups, self.dilatation, 
                 self.quaternion_format)
         else:
             return quaternion_conv(input, self.r_weight, self.i_weight, self.j_weight, 
@@ -163,7 +162,7 @@ class QuaternionConv(Module):
             + ', kernel_size='    + str(self.kernel_size) \
             + ', stride='         + str(self.stride) \
             + ', padding='        + str(self.padding) \
-            + ', dilation='       + str(self.dilation) \
+            + ', dilation='       + str(self.dilatation) \
             + ', init_criterion=' + str(self.init_criterion) \
             + ', weight_init='    + str(self.weight_init) \
             + ', seed='           + str(self.seed) \

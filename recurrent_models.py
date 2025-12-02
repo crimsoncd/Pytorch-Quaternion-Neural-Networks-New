@@ -12,7 +12,6 @@ from torch.nn import Parameter
 from torch.nn import functional as F
 import torch.optim
 from torch import autograd
-from torch.autograd import Variable
 from quaternion_layers import *
 
 #
@@ -35,7 +34,7 @@ class QRNN(nn.Module):
         self.uh  = QuaternionLinearAutograd(self.hidden_dim, self.hidden_dim)
         
         # Output layer initialization
-        self.fco = nn.Linear(curr_dim, self.num_classes)
+        self.fco = nn.Linear(self.hidden_dim, self.num_classes)
 
         # Optimizer
         self.adam = torch.optim.Adam(self.parameters(), lr=0.005)
@@ -43,12 +42,9 @@ class QRNN(nn.Module):
     def forward(self, x):
     
         # Init hidden states
-        h_init = Variable(torch.zeros(x.shape[1],self. hidden_dim))
-        
-
-        if self.CUDA:
-            x      = x.cuda()
-            h_init = h_init.cuda()
+        device = torch.device('cuda' if self.CUDA and torch.cuda.is_available() else 'cpu')
+        h_init = torch.zeros(x.shape[1], self.hidden_dim, device=device)
+        x = x.to(device)
         
         # Compute W * X in parallel
 
@@ -105,12 +101,9 @@ class QLSTM(nn.Module):
     def forward(self, x):
 
 
-        h_init = Variable(torch.zeros(x.shape[1],self. hidden_dim))   
-           
-          
-        if self.CUDA:
-            x=x.cuda()
-            h_init=h_init.cuda()
+        device = torch.device('cuda' if self.CUDA and torch.cuda.is_available() else 'cpu')
+        h_init = torch.zeros(x.shape[1], self.hidden_dim, device=device)
+        x = x.to(device)
         
            
         # Feed-forward affine transformation (done in parallel)
@@ -181,12 +174,9 @@ class RNN(nn.Module):
     def forward(self, x):
     
         # Init hidden states
-        h_init = Variable(torch.zeros(x.shape[1],self. hidden_dim))
-        
-
-        if self.CUDA:
-            x      = x.cuda()
-            h_init = h_init.cuda()
+        device = torch.device('cuda' if self.CUDA and torch.cuda.is_available() else 'cpu')
+        h_init = torch.zeros(x.shape[1], self.hidden_dim, device=device)
+        x = x.to(device)
         
         # Compute W * X in parallel
         wx_out=self.wx(x)
@@ -242,12 +232,9 @@ class LSTM(nn.Module):
     def forward(self, x):
 
 
-        h_init = Variable(torch.zeros(x.shape[1],self. hidden_dim))   
-           
-          
-        if self.CUDA:
-            x=x.cuda()
-            h_init=h_init.cuda()
+        device = torch.device('cuda' if self.CUDA and torch.cuda.is_available() else 'cpu')
+        h_init = torch.zeros(x.shape[1], self.hidden_dim, device=device)
+        x = x.to(device)
         
            
         # Feed-forward affine transformation (done in parallel)

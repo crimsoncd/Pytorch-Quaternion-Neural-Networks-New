@@ -6,13 +6,12 @@
 # October 2018
 ##########################################################
 
-import torch
-from torch                import nn
-from torch.utils.data     import DataLoader
-from convolutional_models import CAE, QCAE
+import argparse
 import os
-import numpy              as np
-import sys
+import numpy as np
+import torch
+from torch import nn
+from convolutional_models import CAE, QCAE
 import imageio.v2 as imageio
 
 
@@ -20,16 +19,20 @@ def rgb2gray(rgb):
     gray = np.dot(rgb[...,:3], [0.299, 0.587, 0.114])
     return np.repeat(gray[:, :, np.newaxis], 3, axis=2)
 
-if len(sys.argv) > 1:
-    model       = str(sys.argv[1])
-else:
-    print("Please provide a model : QCAE or CAE")
-    exit(0)
-
-cuda            = True
-num_epochs      = 3000
-learning_rate   = 0.0005
-generation_rate = 100 # One test picture will be generated every 'generation_rate'
+parser = argparse.ArgumentParser()
+parser.add_argument("model", choices=["QCAE", "CAE"], help="Model type")
+parser.add_argument("--kodak_dir", default="KODAK", help="Path to KODAK images")
+parser.add_argument("--epochs", type=int, default=3000)
+parser.add_argument("--lr", type=float, default=0.0005)
+parser.add_argument("--generation_rate", type=int, default=100)
+parser.add_argument("--cuda", action="store_true")
+args = parser.parse_args()
+model = args.model
+kodak_dir = args.kodak_dir
+num_epochs = args.epochs
+learning_rate = args.lr
+generation_rate = args.generation_rate
+cuda = args.cuda
 
 if model == 'QCAE':
     net  = QCAE()
@@ -43,8 +46,8 @@ net = net.to(device)
 # MANAGING PICTURES
 #
 os.makedirs('RES', exist_ok=True)
-train = rgb2gray(imageio.imread('KODAK/kodim05.png'))
-test  = imageio.imread('KODAK/kodim23.png')
+train = rgb2gray(imageio.imread(os.path.join(kodak_dir, 'kodim05.png')))
+test  = imageio.imread(os.path.join(kodak_dir, 'kodim23.png'))
 
 # Normalizing
 train = train / 255
@@ -102,9 +105,10 @@ for epoch in range(num_epochs):
     print("It : "+str(epoch+1)+" | loss_train "+str(loss.detach().cpu().item()))
     
     # If generation rate, generate a test image
-    if (epoch %generation_rate) == 0:
-        output = net(test)
-        out    = output.detach().cpu().numpy()
+    if (epoch % generation_rate) == 0:
+        with torch.no_grad():
+            output = net(test)
+        out = output.detach().cpu().numpy()
         if model == 'QCAE':
             out = np.transpose(out, (0,2,3,1))[:,:,:,1:]
             out = np.reshape(out, (out.shape[1], out.shape[2], out.shape[3]))
@@ -112,6 +116,7 @@ for epoch in range(num_epochs):
             out = np.transpose(out, (0,2,3,1))
             out = np.reshape(out, (out.shape[1], out.shape[2], out.shape[3]))
 
-        imageio.imwrite("RES/save_image"+str(epoch)+".png", out)
+        out_u8 = np.clip(out * 255.0, 0, 255).astype(np.uint8)
+        imageio.imwrite("RES/save_image"+str(epoch)+".png", out_u8)
 
 
